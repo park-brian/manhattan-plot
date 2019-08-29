@@ -10,7 +10,12 @@ import { ManhattanPlot } from './manhattan-plot.js';
     bpAbs1Mb: response.columns.indexOf('bp_abs_1000kb'),
     nLogP2: response.columns.indexOf('nlog_p2')
   };
-  
+  let withKeys = data => ({
+    chr: data[columnIndexes.chr],
+    bpAbs1Mb: data[columnIndexes.bpAbs1Mb],
+    nLogP2: data[columnIndexes.nLogP2],
+  })
+
   let config = {
     data: data,
     xAxis: {
@@ -29,10 +34,16 @@ import { ManhattanPlot } from './manhattan-plot.js';
     },
     point: {
       size: 3,
-	  opacity: 0.6,
+      opacity: 0.6,
       color: (d, i) => d[columnIndexes.chr] % 2 ? '#999' : '#444',
       tooltipTrigger: 'click',
-      tooltip: () => null,
+      tooltip: (data) => {
+        let obj = withKeys(data);
+        return `<pre>${JSON.stringify(obj, null, 2)}</pre>`;
+      },
+      onClick: data => {
+        console.log('clicked', data);
+      }
     },
     onZoom: e => console.log(e),
   };
@@ -40,5 +51,3 @@ import { ManhattanPlot } from './manhattan-plot.js';
   let canvas = document.querySelector('canvas');
   let plot = new ManhattanPlot(canvas, config);
 })();
-
-
