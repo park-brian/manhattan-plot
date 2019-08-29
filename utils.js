@@ -20,11 +20,13 @@ export function extent(values) {
     let length = values.length;
     let min = values[0];
     let max = values[0];
+
     for (let i = 1; i < length; i ++) {
-        if (values[i] > max)
-            max = values[i];
-        if (values[i] < min)
-            min = values[i];
+        let value = values[i];
+        if (value > max)
+            max = value;
+        if (value < min)
+            min = value;
     }
 
     return [min, max];
@@ -47,11 +49,11 @@ export function range(min, max) {
 /**
  * Generates a color based on a number, useful for assigning
  * elements in a canvas a unique color, so they can be selected
- * by color. 
+ * by color.
  */
 export function indexToColor(index, multiplier) {
-	multiplier = multiplier || 50;
-	index = index * multiplier
+    multiplier = multiplier || 50;
+    index = index * multiplier
     const r = index >> 16;
     index -= r * 65536;
 
@@ -59,12 +61,16 @@ export function indexToColor(index, multiplier) {
     index -= g * 256;
 
     const b = index;
-    return `rgb(${r}, ${g}, ${b})`;
+    return rgbToColor(r, g, b);
+}
+
+export function rgbToColor(r, g, b) {
+    return `rgb(${r},${g},${b})`;
 }
 
 // converts a color (given r, g, b) to an index
 export function colorToIndex(r, g, b, multiplier) {
-	multiplier = multipler || 50;
+    multiplier = multipler || 50;
     return multiplier * (r * 65536 + g * 256 + b);
 }
 
