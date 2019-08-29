@@ -1,102 +1,126 @@
-import { extent, indexToColor } from './utils.js';
+import { extent, indexToColor, rgbToColor, viewportToLocalCoordinates } from './utils.js';
 import { getScale } from './scale.js';
 import { axisLeft, axisBottom } from './axis.js';
 
 export class ManhattanPlot {
   constructor(canvas, config) {
     if (!canvas || canvas.constructor !== HTMLCanvasElement)
-      throw('Please provide a canvas as the first argument to ManhattanPlot')
-    
-    this.canvas = canvas;
-	this.overlayCanvas = document.createElement('canvas');
-	this.elementPickerCanvas = document.createElement('canvas');
+      throw 'Please provide a canvas as the first argument to ManhattanPlot';
 
-    this.ctx = canvas.getContext('2d');
-    this.backingCtx = backingCanvas.getContext('2d');
-    
-	this.config = config;
-	this.draw();
+    this.canvas = canvas;
+    this.ctx = this.canvas.getContext('2d');
+
+    // create a hidden canvas to be used for selecting points
+    this.hiddenCanvas = document.createElement('canvas');
+    this.hiddenCtx = this.hiddenCanvas.getContext('2d');
+
+    this.config = config;
+    this.draw();
   }
-  
+
   draw() {
-	// initialize both canvas and backing canvas (used for selection)
+    let time = new Date().getTime();
+    const logTime = () => console.log(new Date().getTime() - time);
+
+    const config = this.config;
     const canvas = this.canvas;
-	const backingCanvas = this.backingCanvas;
+    const hiddenCanvas = this.hiddenCanvas;
+    const ctx = this.ctx;
+    const hiddenCtx = this.hiddenCtx;
+    const data = this.config.data;
     const canvasWidth = canvas.clientWidth;
     const canvasHeight = canvas.clientHeight;
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
-	backingCanvas.width = canvasWidth;
-	backingCanvas.height = canvasHeight;
-	
-    const margins = {
-      top: 20,
-      right: 20,
-      bottom: 40,
-      left: 40,
-    };
-
+    const margins = config.margins = {top: 20, right: 20, bottom: 40, left: 40, ...config.margins};
     const width = canvasWidth - margins.left - margins.right;
     const height = canvasHeight - margins.top - margins.bottom;
+    const pointMap = config.pointMap = {}; // maps colors to data indexes
 
-    const ctx = this.ctx;
-	const backingCtx = backingCanvas.getContext('2d');
-    const data = this.config.data;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    hiddenCanvas.width = canvasWidth;
+    hiddenCanvas.height = canvasHeight;
+
+    const xData = data.map(d => d[config.xAxis.key]);
+    const yData = data.map(d => d[config.yAxis.key]);
+
+    if (!config.xAxis.extent)
+      config.xAxis.extent = extent(xData);
+
+    if (!config.yAxis.extent)
+      config.yAxis.extent = extent(yData);
+
+    const xScale = config.xAxis.scale = getScale(config.xAxis.extent, [0, width]);
+    const yScale = config.yAxis.scale = getScale(config.yAxis.extent, [height, 0]);
+
+    ctx.save();
+    hiddenCtx.save();
+
+    // translate scatter points by left/top margin
+    ctx.translate(margins.left, margins.top);
+    hiddenCtx.translate(margins.left, margins.top);
+
+    // draw points on canvas and backing canvas
+    const pointSize = config.point.size;
+    const pointColor = config.point.color;
+    for (let i = 0; i < data.length; i++) {
+      const d = data[i];
+      const x = xScale(xData[i]);
+      const y = yScale(yData[i]);
+
+      ctx.beginPath();
+      ctx.arc(x, y, pointSize, 0, 2 * Math.PI, true);
+      ctx.fillStyle = typeof pointColor === 'function'
+        ? pointColor(d, i) : pointColor;
+      ctx.fill();
+
+      hiddenCtx.beginPath();
+      hiddenCtx.arc(x, y, pointSize, 0, 2 * Math.PI, true);
+      const hiddenPointColor = indexToColor(i);
+      hiddenCtx.fillStyle = hiddenPointColor;
+      pointMap[hiddenPointColor] = d;
+      hiddenCtx.fill();
+    }
+
+    // draw y axis
+
+    ctx.restore();
+    hiddenCtx.restore();
+    this.attachEventHandlers(canvas);
+    logTime();
+  }
+
+  attachEventHandlers(canvas) {
     const config = this.config;
 
-    const xData = data.map(e => e[config.xAxis.key]);
-    const yData = data.map(e => e[config.yAxis.key]);
+    // change mouse cursor when hovering over a point
+    canvas.onmousemove = ev => {
+      canvas.style.cursor = this.getPointFromEvent(ev)
+        ? 'pointer'
+        : 'default';
+    }
 
-    const xScale = getScale(
-      config.xAxis.extent || extent(xData),
-      [0, width]
-    );
-    const yScale = getScale(
-      config.yAxis.extent || extent(yData),
-      [height, 0]
-    );
-	
-	const pointSize = config.point.size;
-	const pointColor = config.point.color;
-	
-	ctx.save();
-	backingCtx.save();
-	
-	// translate scatter points by left/top margin
-	
-	ctx.translate(margins.left, margins.top);
-	backingCtx.translate(margins.left, margins.top);
+    // call click event callbacks
+    canvas.onclick = ev => {
+      const point = this.getPointFromEvent(ev);
+      if (!point) return;
+      const {tooltip, onClick} = config.point;
 
-	// draw points on canvas and backing canvas
-	for (let i = 0; i < data.length; i ++) {
-		const d = data[i];
-		const x = xScale(xData[i]);
-		const y = yScale(yData[i]);
-        ctx.beginPath();
-        ctx.arc(x, y, pointSize, 0, 2 * Math.PI, true);
-		
-		ctx.fillStyle = typeof pointColor === 'function'
-			? pointColor (d, i)
-			: pointColor;
-			
-        ctx.fill();
-	
-        backingCtx.beginPath();
-        backingCtx.arc(x, y, pointSize, 0, 2 * Math.PI, true);
-		backingCtx.fillStyle = indexToColor(i);
-        backingCtx.fill();
-	}
+      if (onClick)
+        onClick(point);
 
-	ctx.restore();
-	backingCtx.restore();
-	
-	
-    
-	
-	
-    console.log(this.ctx, this.config);
+      if (tooltip)
+        this.showTooltip(ev, tooltip(point));
+    };
   }
-  
-  
-  
+
+  showTooltip(ev, html) {
+    console.log('showing tooltip', ev, html);
+  }
+
+  getPointFromEvent({clientX, clientY, target}) {
+    let {x, y} = viewportToLocalCoordinates(clientX, clientY, target);
+    const [r, g, b, a] = this.hiddenCtx.getImageData(x, y, 1, 1).data;
+    return a ? this.config.pointMap[rgbToColor(r, g, b)] : null
+  }
+
 }
