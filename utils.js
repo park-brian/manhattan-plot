@@ -40,6 +40,14 @@ export function range(min, max) {
     return nums;
 }
 
+export function debounce(callback, interval) {
+    let id;
+    return function() {
+        if (id) clearTimeout(id);
+        id = setTimeout(callback.bind(this, ...arguments), interval);
+    }
+}
+
 // generates a color based on an index
 // a multiplier is needed to account for anti-aliasing,
 // which produces slightly different pixel colors at edges
