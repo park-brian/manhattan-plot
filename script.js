@@ -33,21 +33,26 @@ import { ManhattanPlot } from './manhattan-plot.js';
       key: columnIndexes.nLogP2
     },
     point: {
-      size: 3,
+      size: 4,
       opacity: 0.6,
-      color: (d, i) => d[columnIndexes.chr] % 2 ? '#999' : '#444',
-      tooltipTrigger: 'click',
-      tooltip: (data) => {
-        let obj = withKeys(data);
-        return `<pre>${JSON.stringify(obj, null, 2)}</pre>`;
+      color: (d, i) => d[columnIndexes.chr] % 2 ? '#005ea2' : '#e47833',
+      tooltip: {
+        trigger: 'click',
+        class: 'custom-tooltip',
+        style: 'width: 300px;',
+        content: async data => {
+          let obj = withKeys(data);
+          return `<pre>${JSON.stringify(obj, null, 2)}</pre>`;
+        }
       },
       onClick: data => {
         console.log('clicked', data);
       }
     },
+    zoom: true,
     onZoom: e => console.log(e),
   };
 
-  let canvas = document.querySelector('canvas');
-  let plot = new ManhattanPlot(canvas, config);
+  let container = document.querySelector('#plot-container');
+  let plot = new ManhattanPlot(container, config);
 })();
