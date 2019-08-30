@@ -1,1 +1,6 @@
-/* todo: add styles */
+.manhattan-plot-tooltip {
+    background-color: white;
+    border-radius: 0.25rem;
+    padding: 0.5rem 1rem;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
