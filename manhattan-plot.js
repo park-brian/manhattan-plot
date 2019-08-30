@@ -1,13 +1,15 @@
-import { extent, indexToColor, rgbToColor, viewportToLocalCoordinates } from './utils.js';
+import { debounce, extent, indexToColor, rgbToColor, viewportToLocalCoordinates } from './utils.js';
 import { getScale } from './scale.js';
 import { axisLeft, axisBottom } from './axis.js';
 
 export class ManhattanPlot {
-  constructor(canvas, config) {
-    if (!canvas || canvas.constructor !== HTMLCanvasElement)
-      throw 'Please provide a canvas as the first argument to ManhattanPlot';
+  constructor(container, config) {
+    const containerStyle = getComputedStyle(container);
+    if (containerStyle.position === 'static')
+      container.style.position = 'relative'
+    this.container = container;
 
-    this.canvas = canvas;
+    this.canvas = document.createElement('canvas');
     this.ctx = this.canvas.getContext('2d');
 
     // create a hidden canvas to be used for selecting points
@@ -16,6 +18,10 @@ export class ManhattanPlot {
 
     this.config = config;
     this.draw();
+
+    this.tooltip = this.createTooltip();
+    this.container.appendChild(this.canvas);
+    this.container.appendChild(this.tooltip);
   }
 
   draw() {
@@ -28,8 +34,8 @@ export class ManhattanPlot {
     const ctx = this.ctx;
     const hiddenCtx = this.hiddenCtx;
     const data = this.config.data;
-    const canvasWidth = canvas.clientWidth;
-    const canvasHeight = canvas.clientHeight;
+    const canvasWidth = this.container.clientWidth;
+    const canvasHeight = this.container.clientHeight;
     const margins = config.margins = {top: 20, right: 20, bottom: 40, left: 40, ...config.margins};
     const width = canvasWidth - margins.left - margins.right;
     const height = canvasHeight - margins.top - margins.bottom;
@@ -62,6 +68,7 @@ export class ManhattanPlot {
     // draw points on canvas and backing canvas
     const pointSize = config.point.size;
     const pointColor = config.point.color;
+    ctx.globalAlpha = config.point.opacity;
     for (let i = 0; i < data.length; i++) {
       const d = data[i];
       const x = xScale(xData[i]);
@@ -94,27 +101,52 @@ export class ManhattanPlot {
 
     // change mouse cursor when hovering over a point
     canvas.onmousemove = ev => {
+      const defaultCursor = (config.zoom)
+        ? 'crosshair'
+        : 'default';
       canvas.style.cursor = this.getPointFromEvent(ev)
         ? 'pointer'
-        : 'default';
-    }
+        : defaultCursor;
+    };
 
     // call click event callbacks
-    canvas.onclick = ev => {
+    canvas.onclick = async ev => {
+      this.hideTooltip();
+      const {tooltip, onClick} = config.point;
+      const {trigger, content} = tooltip;
       const point = this.getPointFromEvent(ev);
       if (!point) return;
-      const {tooltip, onClick} = config.point;
 
       if (onClick)
         onClick(point);
 
-      if (tooltip)
-        this.showTooltip(ev, tooltip(point));
+      if (content && trigger === 'click')
+        this.showTooltip(ev, await content(point, this.tooltip));
     };
   }
 
+  createTooltip() {
+    const tooltip = document.createElement('div');
+    tooltip.classList.add('manhattan-plot-tooltip')
+    tooltip.style.display = 'none';
+    tooltip.style.position = 'absolute';
+    return tooltip;
+  }
+
   showTooltip(ev, html) {
-    console.log('showing tooltip', ev, html);
+    let {x, y} = viewportToLocalCoordinates(ev.clientX, ev.clientY, ev.target);
+    this.tooltip.innerHTML = '';
+    this.tooltip.style.display = 'inline-block';
+    this.tooltip.style.left = x + 'px';
+    this.tooltip.style.top = y + 'px';
+    if (html instanceof Element)
+      this.tooltip.insertAdjacentElement('beforeend', html);
+    else
+      this.tooltip.insertAdjacentHTML('beforeend', html);
+  }
+
+  hideTooltip() {
+    this.tooltip.style.display = 'none';
   }
 
   getPointFromEvent({clientX, clientY, target}) {
