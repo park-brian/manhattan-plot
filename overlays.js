@@ -3,10 +3,9 @@ import { viewportToLocalCoordinates } from './utils.js';
 
 
 export function drawSelectionOverlay(config, ctx, overlayCtx) {
-  overlayCtx.globalAlpha = 0.1;
-
   let canvas = ctx.canvas;
   let overlayCanvas = overlayCtx.canvas;
+  overlayCtx.globalAlpha = 0.1;
 
   let xScale = config.xAxis.scale;
   let xInverseScale = config.xAxis.inverseScale;
@@ -36,6 +35,36 @@ export function drawSelectionOverlay(config, ctx, overlayCtx) {
     if (withinMargins && selectedBounds && config.xAxis.onSelected)
       config.xAxis.onSelected(selectedBounds, ticks.indexOf(selectedBounds[0]))
   });
+}
+
+
+
+export function drawZoomOverlay(config, ctx, overlayCtx) {
+    let canvas = ctx.canvas;
+    let overlayCanvas = overlayCtx.canvas;
+
+    let xScale = config.xAxis.scale;
+    let yScale = config.yAxis.scale;
+
+    let xInverseScale = config.xAxis.inverseScale;
+    let yInverseScale = config.yAxis.inverseScale;
+
+    canvas.addEventListener('mousedown', ev => {
+
+    });
+
+    canvas.addEventListener('mousemove', ev => {
+
+    });
+
+    canvas.addEventListener('mouseup', ev => {
+
+    });
+
+    canvas.addEventListener('dblclick', ev => {
+
+    });
+
 }
 
 function getSectionBounds(value, ticks) {
