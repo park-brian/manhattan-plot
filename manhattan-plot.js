@@ -2,7 +2,7 @@ import { debounce, extent, rgbToColor, viewportToLocalCoordinates } from './util
 import { getScale, getTicks } from './scale.js';
 import { axisLeft, axisBottom } from './axis.js';
 import { drawPoints } from './points.js';
-import { drawSelectionOverlay } from './overlays.js';
+import { drawSelectionOverlay, drawZoomOverlay } from './overlays.js';
 
 export class ManhattanPlot {
   constructor(container, config) {
@@ -87,8 +87,9 @@ export class ManhattanPlot {
     // allow either selection or zoom, but not both
     if (config.xAxis.allowSelection)
       drawSelectionOverlay(config, ctx, overlayCtx);
-    else if (config.zoom)
-      this.drawZoomOverlay(config, ctx, overlayCtx);
+
+    else if (config.allowZoom)
+      drawZoomOverlay(config, ctx, overlayCtx);
 
     this.attachEventHandlers(canvas);
   }
@@ -103,15 +104,6 @@ export class ManhattanPlot {
     );
   }
 
-  drawZoomOverlay(config, ctx, overlayCtx) {
-    let canvas = ctx.canvas;
-    let overlayCtx = overlayCtx.canvas;
-
-
-
-
-  }
-
   attachEventHandlers(canvas) {
     const config = this.config;
 
@@ -124,10 +116,10 @@ export class ManhattanPlot {
       if (withinMargins && config.xAxis.allowSelection)
         cursor = 'pointer';
 
-      else if (withinMargins && config.zoom)
+      else if (withinMargins && config.allowZoom)
         cursor = 'crosshair';
 
-      // this is a relatively expensive function, so we want to have it last
+      // this is a relatively expensive function, do not want to call it all the time
       else if (this.getPointFromEvent(ev))
         cursor = 'pointer';
 
