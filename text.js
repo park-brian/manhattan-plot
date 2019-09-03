@@ -14,6 +14,9 @@ export function renderText(ctx, textDefs, defaultDef) {
   defaultDef = Object.assign({}, defaultTextDef, defaultDef);
 
   let lastOffset = 0;
+  if (typeof textDefs === 'string')
+    textDefs = [{text: textDefs}];
+
   textDefs.forEach(function(def) {
     if (typeof def === 'string') def = { text: def };
     for (let key in defaultDef) ctx[key] = def[key] || defaultDef[key];
@@ -26,6 +29,9 @@ export function renderText(ctx, textDefs, defaultDef) {
 
 export function measureWidth(ctx, textDefs, defaultDef) {
   let lastOffset = 0;
+  if (typeof textDefs === 'string')
+    textDefs = [{text: textDefs}];
+
   textDefs.forEach(function(def) {
     if (typeof def === 'string') def = { text: def };
     for (let key in defaultDef) ctx[key] = def[key] || defaultDef[key];
