@@ -13,7 +13,7 @@ export function max(values) {
     for (let i = 1; i < length; i ++)
         if (values[i] > max)
             max = values[i];
-    return min;
+    return max;
 }
 
 export function extent(values) {
