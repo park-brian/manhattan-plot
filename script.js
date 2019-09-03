@@ -1,8 +1,10 @@
 import { ManhattanPlot } from './manhattan-plot.js';
+import { systemFont } from './text.js';
 
 (async function main() {
   let response = await fetch('summary.json').then(e => e.json());
   let ranges = await fetch('ranges.json').then(e => e.json());
+  ranges = ranges.filter(e => e.chr <= 22); // filter out chromosomes 23+ for now
 
   let data = response.data;
   let columnIndexes = {
@@ -19,18 +21,24 @@ import { ManhattanPlot } from './manhattan-plot.js';
   let config = {
     data: data,
     xAxis: {
-      centerLabels: true,
-      labelFormatter: val => `CHR ${val}`,
+      title: [{text: `Ewing's Sarcoma`, font: `600 14px ${systemFont}`}],
       key: columnIndexes.bpAbs1Mb,
-      onSelectGroup: e => console.log(e),
-      ticks: ranges.map(r => ({
-        label: r.chr,
-        value: r.max_bp_abs
-      })),
+      ticks: ranges.map(r => r.max_bp_abs),
+      tickFormat: (tick, i) => ranges[i].chr,
+      labelsBetweenTicks: true,
+      allowSelection: true,
+      onSelected: (range, i) => {
+        console.log('selected x axis section', range, i)
+      }
     },
     yAxis: {
-      labelFormatter: d => d,
-      key: columnIndexes.nLogP2
+      title: [
+        {text: `-log`, font: `600 14px ${systemFont}`},
+        {text: '10', textBaseline: 'middle', font: `600 10px ${systemFont}`},
+        {text: `(p)`, font: `600 14px ${systemFont}`}
+      ],
+      key: columnIndexes.nLogP2,
+      tickFormat: tick => (tick).toFixed(3),
     },
     point: {
       size: 4,
@@ -49,7 +57,7 @@ import { ManhattanPlot } from './manhattan-plot.js';
         console.log('clicked', data);
       }
     },
-    zoom: true,
+    allowZoom: true,
     onZoom: e => console.log(e),
   };
 
