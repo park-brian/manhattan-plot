@@ -1,6 +1,8 @@
-import { debounce, extent, indexToColor, rgbToColor, viewportToLocalCoordinates } from './utils.js';
-import { getScale } from './scale.js';
+import { debounce, extent, rgbToColor, viewportToLocalCoordinates } from './utils.js';
+import { getScale, getTicks } from './scale.js';
 import { axisLeft, axisBottom } from './axis.js';
+import { drawPoints } from './points.js';
+import { drawSelectionOverlay } from './overlays.js';
 
 export class ManhattanPlot {
   constructor(container, config) {
@@ -12,6 +14,14 @@ export class ManhattanPlot {
     this.canvas = document.createElement('canvas');
     this.ctx = this.canvas.getContext('2d');
 
+    // create an overlay canvas to be used for selecting areas (zooming)
+    this.overlayCanvas = document.createElement('canvas');
+    this.overlayCtx = this.overlayCanvas.getContext('2d');
+    this.overlayCanvas.style.position = 'absolute';
+    this.overlayCanvas.style.pointerEvents = 'none';
+    this.overlayCanvas.style.top = '0';
+    this.overlayCanvas.style.left = '0';
+
     // create a hidden canvas to be used for selecting points
     this.hiddenCanvas = document.createElement('canvas');
     this.hiddenCtx = this.hiddenCanvas.getContext('2d');
@@ -21,30 +31,34 @@ export class ManhattanPlot {
 
     this.tooltip = this.createTooltip();
     this.container.appendChild(this.canvas);
+    this.container.appendChild(this.overlayCanvas);
     this.container.appendChild(this.tooltip);
   }
 
   draw() {
-    let time = new Date().getTime();
-    const logTime = () => console.log(new Date().getTime() - time);
-
     const config = this.config;
     const canvas = this.canvas;
     const hiddenCanvas = this.hiddenCanvas;
+    const overlayCanvas = this.overlayCanvas;
     const ctx = this.ctx;
     const hiddenCtx = this.hiddenCtx;
+    const overlayCtx = this.overlayCtx;
     const data = this.config.data;
     const canvasWidth = this.container.clientWidth;
     const canvasHeight = this.container.clientHeight;
-    const margins = config.margins = {top: 20, right: 20, bottom: 40, left: 40, ...config.margins};
+    const margins = config.margins = {top: 40, right: 40, bottom: 60, left: 80, ...config.margins};
     const width = canvasWidth - margins.left - margins.right;
     const height = canvasHeight - margins.top - margins.bottom;
-    const pointMap = config.pointMap = {}; // maps colors to data indexes
+    config.pointMap = {}; // maps colors to data indexes
 
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
+
     hiddenCanvas.width = canvasWidth;
     hiddenCanvas.height = canvasHeight;
+
+    overlayCanvas.width = canvasWidth;
+    overlayCanvas.height = canvasHeight;
 
     const xData = data.map(d => d[config.xAxis.key]);
     const yData = data.map(d => d[config.yAxis.key]);
@@ -55,74 +69,86 @@ export class ManhattanPlot {
     if (!config.yAxis.extent)
       config.yAxis.extent = extent(yData);
 
-    const xScale = config.xAxis.scale = getScale(config.xAxis.extent, [0, width]);
-    const yScale = config.yAxis.scale = getScale(config.yAxis.extent, [height, 0]);
+    if (!config.xAxis.ticks)
+      config.xAxis.ticks = getTicks(...config.xAxis.extent, 10);
 
-    ctx.save();
-    hiddenCtx.save();
+    if (!config.yAxis.ticks)
+      config.yAxis.ticks = getTicks(...config.yAxis.extent, 10);
 
-    // translate scatter points by left/top margin
-    ctx.translate(margins.left, margins.top);
-    hiddenCtx.translate(margins.left, margins.top);
+    config.xAxis.scale = getScale(config.xAxis.extent, [0, width]);
+    config.yAxis.scale = getScale(config.yAxis.extent, [height, 0]);
+    config.xAxis.inverseScale = getScale([0, width], config.xAxis.extent);
+    config.yAxis.inverseScale = getScale([height, 0], config.yAxis.extent);
 
-    // draw points on canvas and backing canvas
-    const pointSize = config.point.size;
-    const pointColor = config.point.color;
-    ctx.globalAlpha = config.point.opacity;
-    for (let i = 0; i < data.length; i++) {
-      const d = data[i];
-      const x = xScale(xData[i]);
-      const y = yScale(yData[i]);
+    drawPoints(config, ctx, hiddenCtx);
+    axisLeft(config, ctx);
+    axisBottom(config, ctx);
 
-      ctx.beginPath();
-      ctx.arc(x, y, pointSize, 0, 2 * Math.PI, true);
-      ctx.fillStyle = typeof pointColor === 'function'
-        ? pointColor(d, i) : pointColor;
-      ctx.fill();
+    // allow either selection or zoom, but not both
+    if (config.xAxis.allowSelection)
+      drawSelectionOverlay(config, ctx, overlayCtx);
+    else if (config.zoom)
+      this.drawZoomOverlay(config, ctx, overlayCtx);
 
-      hiddenCtx.beginPath();
-      hiddenCtx.arc(x, y, pointSize, 0, 2 * Math.PI, true);
-      const hiddenPointColor = indexToColor(i);
-      hiddenCtx.fillStyle = hiddenPointColor;
-      pointMap[hiddenPointColor] = d;
-      hiddenCtx.fill();
-    }
-
-    // draw y axis
-
-    ctx.restore();
-    hiddenCtx.restore();
     this.attachEventHandlers(canvas);
-    logTime();
+  }
+
+  isWithinMargins(x, y) {
+    let margins = this.config.margins;
+    return (
+      x > margins.left &&
+      x < this.canvas.width - margins.right &&
+      y > margins.top &&
+      y < this.canvas.height - margins.bottom
+    );
+  }
+
+  drawZoomOverlay(config, ctx, overlayCtx) {
+    let canvas = ctx.canvas;
+    let overlayCtx = overlayCtx.canvas;
+
+
+
+
   }
 
   attachEventHandlers(canvas) {
     const config = this.config;
 
-    // change mouse cursor when hovering over a point
+    // change mouse cursor depending on what is being hovered over
     canvas.onmousemove = ev => {
-      const defaultCursor = (config.zoom)
-        ? 'crosshair'
-        : 'default';
-      canvas.style.cursor = this.getPointFromEvent(ev)
-        ? 'pointer'
-        : defaultCursor;
+      let {x, y} = viewportToLocalCoordinates(ev.clientX, ev.clientY, ev.target);
+      let withinMargins = this.isWithinMargins(x, y);
+      let cursor = 'default';
+
+      if (withinMargins && config.xAxis.allowSelection)
+        cursor = 'pointer';
+
+      else if (withinMargins && config.zoom)
+        cursor = 'crosshair';
+
+      // this is a relatively expensive function, so we want to have it last
+      else if (this.getPointFromEvent(ev))
+        cursor = 'pointer';
+
+      canvas.style.cursor = cursor
     };
 
     // call click event callbacks
-    canvas.onclick = async ev => {
-      this.hideTooltip();
-      const {tooltip, onClick} = config.point;
-      const {trigger, content} = tooltip;
-      const point = this.getPointFromEvent(ev);
-      if (!point) return;
+    if (config.point.onclick || config.point.tooltip)
+      canvas.onclick = async ev => {
+        this.hideTooltip();
+        const {tooltip, onClick} = config.point;
+        const {trigger, content} = tooltip;
+        const point = this.getPointFromEvent(ev);
+        if (!point) return;
 
-      if (onClick)
-        onClick(point);
+        if (onClick)
+          onClick(point);
 
-      if (content && trigger === 'click')
-        this.showTooltip(ev, await content(point, this.tooltip));
-    };
+        if (content && trigger === 'click')
+          this.showTooltip(ev, await content(point, this.tooltip));
+      };
   }
 
   createTooltip() {
@@ -155,4 +181,21 @@ export class ManhattanPlot {
     return a ? this.config.pointMap[rgbToColor(r, g, b)] : null
   }
 
+  /** remove references to objects for garbage collection */
+  destroy() {
+    this.canvas.remove();
+    this.overlayCanvas.remove();
+    this.tooltip.remove();
+
+    this.canvas.onclick = null;
+    this.hiddenCanvas = null;
+    this.overlayCanvas = null;
+    this.tooltip = null;
+
+    this.ctx = null;
+    this.hiddenCtx = null;
+    this.overlayCtx = null;
+
+    this.config = null;
+  }
 }
