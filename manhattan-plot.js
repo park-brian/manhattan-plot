@@ -113,15 +113,11 @@ export class ManhattanPlot {
       let withinMargins = this.isWithinMargins(x, y);
       let cursor = 'default';
 
-      if (withinMargins && config.xAxis.allowSelection)
+      if ((withinMargins && config.xAxis.allowSelection) || this.getPointFromEvent(ev))
         cursor = 'pointer';
 
       else if (withinMargins && config.allowZoom)
         cursor = 'crosshair';
-
-      // this is a relatively expensive function, do not want to call it all the time
-      else if (this.getPointFromEvent(ev))
-        cursor = 'pointer';
 
       canvas.style.cursor = cursor
     };
