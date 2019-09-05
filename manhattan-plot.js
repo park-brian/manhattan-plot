@@ -27,12 +27,48 @@ export class ManhattanPlot {
     this.hiddenCtx = this.hiddenCanvas.getContext('2d');
 
     this.config = config;
-    this.draw();
-
+    if (this.config.xAxis.extent)
+      this.config.xAxis.defaultExtent = this.config.xAxis.extent;
+    if (this.config.yAxis.extent)
+      this.config.yAxis.defaultExtent = this.config.yAxis.extent;
     this.tooltip = this.createTooltip();
     this.container.appendChild(this.canvas);
     this.container.appendChild(this.overlayCanvas);
     this.container.appendChild(this.tooltip);
+    this.draw();
+
+    this.attachEventHandlers(this.canvas);
+
+    // allow either selection or zoom, but not both
+    if (config.xAxis.allowSelection)
+      drawSelectionOverlay(config, this.ctx, this.overlayCtx);
+
+    else if (config.allowZoom) {
+      drawZoomOverlay(config, this.ctx, this.overlayCtx);
+      config.setZoomWindow = ev => {
+        let {xMin, xMax, yMin, yMax} = ev.bounds;
+        config.xAxis.extent = [xMin, xMax];
+        config.yAxis.extent = [yMin, yMax];
+        this.draw();
+      }
+      config.zoomOut = ev => {
+        if (!zoomStack.length) {
+          return config.resetZoom();
+        }
+
+        const zoom = config.zoomStack.pop();
+
+      }
+
+      config.resetZoom = ev => {
+        const xData = config.data.map(d => d[config.xAxis.key]);
+        const yData = config.data.map(d => d[config.yAxis.key]);
+        config.xAxis.extent = config.xAxis.defaultExtent || extent(xData);
+        config.yAxis.extent = config.yAxis.defaultExtent || extent(yData);
+        config.zoomStack = [];
+        this.draw();
+      }
+    }
   }
 
   draw() {
@@ -50,6 +86,7 @@ export class ManhattanPlot {
     const width = canvasWidth - margins.left - margins.right;
     const height = canvasHeight - margins.top - margins.bottom;
     config.pointMap = {}; // maps colors to data indexes
+    config.zoomStack = [];
 
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
@@ -69,10 +106,10 @@ export class ManhattanPlot {
     if (!config.yAxis.extent)
       config.yAxis.extent = extent(yData);
 
-    if (!config.xAxis.ticks)
+    if (!config.xAxis.ticks || config.allowZoom)
       config.xAxis.ticks = getTicks(...config.xAxis.extent, 10);
 
-    if (!config.yAxis.ticks)
+    if (!config.yAxis.ticks || config.allowZoom)
       config.yAxis.ticks = getTicks(...config.yAxis.extent, 10);
 
     config.xAxis.scale = getScale(config.xAxis.extent, [0, width]);
@@ -80,18 +117,10 @@ export class ManhattanPlot {
     config.xAxis.inverseScale = getScale([0, width], config.xAxis.extent);
     config.yAxis.inverseScale = getScale([height, 0], config.yAxis.extent);
 
+    ctx.clearRect(0, 0, width, height);
     drawPoints(config, ctx, hiddenCtx);
     axisLeft(config, ctx);
     axisBottom(config, ctx);
-
-    // allow either selection or zoom, but not both
-    if (config.xAxis.allowSelection)
-      drawSelectionOverlay(config, ctx, overlayCtx);
-
-    else if (config.allowZoom)
-      drawZoomOverlay(config, ctx, overlayCtx);
-
-    this.attachEventHandlers(canvas);
   }
 
   isWithinMargins(x, y) {
