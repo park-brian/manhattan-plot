@@ -1,4 +1,5 @@
 import { viewportToLocalCoordinates } from './utils.js';
+import { getScale } from './scale.js';
 
 export function drawSelectionOverlay(config, ctx, overlayCtx) {
   let canvas = ctx.canvas;
@@ -12,7 +13,13 @@ export function drawSelectionOverlay(config, ctx, overlayCtx) {
   let selectedBounds = null;
   if (ticks[0] != 0) ticks.unshift(0);
 
-  canvas.addEventListener('mousemove', ev => {
+  canvas.removeEventListener('mousemove', drawOverlay);
+  canvas.addEventListener('click', selectOverlay);
+
+  canvas.addEventListener('mousemove', drawOverlay);
+  canvas.addEventListener('click', selectOverlay);
+
+  function drawOverlay(ev) {
     overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
     let {x, y} = viewportToLocalCoordinates(ev.clientX, ev.clientY, ev.target);
     let scaledX = xInverseScale(x - margins.left);
@@ -24,45 +31,46 @@ export function drawSelectionOverlay(config, ctx, overlayCtx) {
       let width = xScale(selectedBounds[1] - selectedBounds[0]);
       let height = overlayCanvas.height - config.margins.bottom - config.margins.top;
       overlayCtx.fillRect(1 + margins.left + xPosition, margins.top, width, height)
-    }1
-  });
+    }
+  }
 
-  canvas.addEventListener('click', ev => {
+  function selectOverlay(ev) {
     let {x, y} = viewportToLocalCoordinates(ev.clientX, ev.clientY, ev.target);
     let withinMargins = isWithinMargins(x, y, canvas, margins);
     if (withinMargins && selectedBounds && config.xAxis.onSelected)
       config.xAxis.onSelected(selectedBounds, ticks.indexOf(selectedBounds[0]))
-  });
+  }
 }
 
 export function drawZoomOverlay(config, ctx, overlayCtx) {
     let canvas = ctx.canvas;
-    overlayCtx.globalAlpha = 0.5;
-    overlayCtx.globalCompositeOperation = 'copy';
-
     let margins = config.margins;
-    let xInverseScale = config.xAxis.inverseScale;
-    let yInverseScale = config.yAxis.inverseScale;
+    let width = canvas.width - margins.left - margins.right;
+    let height = canvas.height - margins.top - margins.bottom;
     let zoomArea = { x1: 0, x2: 0, y1: 0, y2: 0 };
     let mouseDown = false;
 
-    canvas.addEventListener('mousedown', ev => {
-      let {x, y} = viewportToLocalCoordinates(ev.clientX, ev.clientY, ev.target);
-      let withinMargins = isWithinMargins(x, y, canvas, margins);
-      if (withinMargins) {
-        mouseDown = true;
-        zoomArea = {
-          x1: x,
-          x2: x,
-          y1: y,
-          y2: y,
-        }
-      }
-    });
+    // remove previously attached event listeners
+    canvas.removeEventListener('mousedown', startZoom);
+    canvas.removeEventListener('mousemove', updateZoomWindow);
+    canvas.removeEventListener('mouseup', endZoom);
+    canvas.removeEventListener('dblclick', updateZoomWindow);
 
-    canvas.addEventListener('mousemove', ev => {
+    canvas.addEventListener('mousedown', startZoom);
+    canvas.addEventListener('mousemove', updateZoomWindow);
+    canvas.addEventListener('mouseup', endZoom);
+    canvas.addEventListener('dblclick', resetZoom);
+
+    function startZoom(ev) {
       let {x, y} = viewportToLocalCoordinates(ev.clientX, ev.clientY, ev.target);
       let withinMargins = isWithinMargins(x, y, canvas, margins);
+      if (!withinMargins) return false;
+      zoomArea = { x1: x, x2: x, y1: y, y2: y };
+      mouseDown = true;
+    }
+
+    function updateZoomWindow(ev) {
+      let {x, y} = viewportToLocalCoordinates(ev.clientX, ev.clientY, ev.target);
       if (!mouseDown ||
         Math.abs(x - zoomArea.x1) < 10 ||
         Math.abs(y - zoomArea.y1) < 10)
@@ -71,41 +79,52 @@ export function drawZoomOverlay(config, ctx, overlayCtx) {
       zoomArea.x2 = x;
       zoomArea.y2 = y;
 
+      overlayCtx.globalAlpha = 0.5;
+      overlayCtx.clearRect(
+        margins.left,
+        margins.top,
+        width,
+        height
+      );
       overlayCtx.fillRect(
         margins.left,
         margins.top,
-        canvas.width - margins.left - margins.right,
-        canvas.height - margins.top - margins.bottom
+        width,
+        height
       );
-
       overlayCtx.clearRect(
         Math.min(zoomArea.x1, zoomArea.x2),
         Math.min(zoomArea.y1, zoomArea.y2),
         Math.abs(zoomArea.x2 - zoomArea.x1),
         Math.abs(zoomArea.y2 - zoomArea.y1)
-      )
-    });
+      );
+    }
 
-    canvas.addEventListener('mouseup', ev => {
-      overlayCtx.clearRect(0, 0, canvas.width, canvas.height);
+    function endZoom(ev) {
+      let {x, y} = viewportToLocalCoordinates(ev.clientX, ev.clientY, ev.target);
+      overlayCtx.clearRect(margins.left, margins.top, width, height);
       mouseDown = false;
-      let { x1, x2, y1, y2 } = zoomArea;
+      zoomArea.x2 = x;
+      zoomArea.y2 = y;
 
       // order coordinates so that x1 < x2, y2 < y2, and subtract margins
-      x1 = Math.min(x1, x2) - margins.left;
-      x2 = Math.max(x2, x2) - margins.left;
-      y1 = Math.min(y1, y2) - margins.top;
-      y2 = Math.max(y1, y2) - margins.top;
+      let x1 = Math.min(zoomArea.x1, zoomArea.x2) - margins.left; // left value (xMin)
+      let y1 = Math.min(zoomArea.y1, zoomArea.y2) - margins.top; // top value (yMax)
+      let x2 = Math.max(zoomArea.x1, zoomArea.x2) - margins.left; // right value (xMax)
+      let y2 = Math.max(zoomArea.y1, zoomArea.y2) - margins.top; // bottom value (yMin)
+      if (x2 - x1 < 20 || y2 - y1 < 20) return false;
 
       // make sure coordinates are within bounds
       x1 = Math.max(x1, 0);
       y1 = Math.max(y1, 0);
-      x2 = Math.min(x2, canvas.width - margins.right - margins.left);
-      y2 = Math.min(y2, canvas.height - margins.top - margins.bottom);
+      x2 = Math.min(x2, width);
+      y2 = Math.min(y2, height);
 
       // apply inverse scales to determine original data bounds
-      let xMax = xInverseScale(x1);
-      let xMin = xInverseScale(x2);
+      let xInverseScale = getScale([0, width], config.xAxis.extent);
+      let yInverseScale = getScale([height, 0], config.yAxis.extent);
+      let xMin = xInverseScale(x1);
+      let xMax = xInverseScale(x2);
       let yMax = yInverseScale(y1);
       let yMin = yInverseScale(y2);
 
@@ -116,11 +135,11 @@ export function drawZoomOverlay(config, ctx, overlayCtx) {
 
       config.setZoomWindow && config.setZoomWindow(window);
       config.onZoom && config.onZoom(window);
-    });
+    }
 
-    canvas.addEventListener('dblclick', ev => {
-      config.zoomWindow = null;
-    });
+    function resetZoom(ev) {
+      config.resetZoom && config.resetZoom();
+    }
 }
 
 function getSectionBounds(value, ticks) {
