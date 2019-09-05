@@ -7,6 +7,8 @@ export function drawPoints(config, ctx, hiddenCtx) {
   const yKey = config.yAxis.key
   const xScale = config.xAxis.scale;
   const yScale = config.yAxis.scale;
+  const [xMin, xMax] = config.xAxis.extent;
+  const [yMin, yMax] = config.yAxis.extent;
 
   ctx.save();
   hiddenCtx.save();
@@ -21,8 +23,14 @@ export function drawPoints(config, ctx, hiddenCtx) {
   ctx.globalAlpha = config.point.opacity;
   for (let i = 0; i < data.length; i++) {
     const d = data[i];
-    const x = xScale(d[xKey]);
-    const y = yScale(d[yKey]);
+    const dx = d[xKey];
+    const dy = d[yKey]
+
+    if (dx < xMin || dx > xMax || dy < yMin || dy > yMax)
+      continue;
+
+    const x = xScale(dx);
+    const y = yScale(dy);
 
     ctx.beginPath();
     ctx.arc(x, y, pointSize, 0, 2 * Math.PI, true);
