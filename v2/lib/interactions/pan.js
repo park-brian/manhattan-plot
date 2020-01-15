@@ -1,0 +1,1 @@
+function enablePan(ctx) {}

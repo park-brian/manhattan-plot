@@ -1,0 +1,709 @@
+Only include P values gte 0 and lte 1
+Include genes cached from entire chromosome (dynamic zoom)
+
+Will include cancer phenotypes
+Start with binary datasets for phenotypes mockups
+D3 hierarchy
+URL downloads
+
+
+https://auth.nih.gov/iTrustGateway/Default.aspx?TYPE=33554433&REALMOID=06-b6fc5968-a76f-49dd-8488-6c166926f059&GUID=&SMAUTHREASON=0&METHOD=GET&SMAGENTNAME=-SM-HkQA2wfyo0K2tifnUSyvKBea1GCes9vVYw6Uz18qaK41fv%2bzz8DCOzfXHhzw9Ic1&TARGET=-SM-HTTPS%3a%2f%2fsso%2enci%2enih%2egov%2fcrowd%2fiTrustLogin%2flogin%2ejsp%3ftarget%3dhttps-%3A-%2F-%2Fcollaborate%2enci%2enih%2egov-%2Fpages-%2Fviewpage%2eaction-%3FspaceKey-%3DCIIB-%26title-%3DCCE-%2BiTrust-%2BIntegration-%2BProof-%2Bof-%2BConcept
+
+Mirrored Manhattan Plot Example:
+let div;
+
+let data = {
+	primary: {x, y},
+	secondary: {x, y},
+	genes: {txStart, txEnd, exonStarts, exonEnds, etc}[],
+}
+
+let config = {
+	title: '',
+	behaviors: {
+		zoom, // true/false
+		pan, // true/false
+		selectableAreas: [{x0, x1, y0, y1, data}],
+	},
+	events: {
+		onZoom,
+		onPan,
+		onSelect,
+	},
+	axis: {
+		x: {
+			title, 
+			extent, 
+			ticks: [{value, label}],
+			tickLabelPlacement: 'between' 
+		},
+		y: {
+			title,
+			extent
+		},
+	},
+	tooltips: {
+		point: {},
+		gene: {},
+	},
+}
+
+let styles = {
+	font: {
+		title: '',
+		axisTitle: '',
+		default: '',
+	},
+	point: {
+		primary: {color, size},
+		secondary: {color, size},
+	}
+	gene: {
+		color,
+	},
+};
+
+plot = new ManhattanPlot(div, data, config);
+
+API
+
+create plot
+new Plot()
+
+set window
+plot.setWindow({xMin, xMax, yMin, yMax})
+
+set data
+plot.setPrimaryData({x, y})
+plot.setSecondaryData({x, y})
+plot.setGeneData(genes: [])
+plot.setData({primary: {x, y}, secondary: {x, y}, genes: []})
+
+set config
+plot.setConfig({})
+
+plot.setExtents([x0, x1], [y0, y1]);
+
+
+
+
+
+
+
+Manhattan Plot Properties
+
+Data Properties
+ - point data
+   eg: [
+     {},
+     {}
+   ]
+
+ - genes 
+ - x range
+ - y range
+ - title
+
+DOM Properties
+ - Parent Node
+
+Customization Properties
+ - onZoom
+ - onPan
+ - point styles and tooltip
+ - font styles
+
+
+Internal Containers
+
+ - Plot Canvas
+ - Plot Canvas Overlay
+
+ - Gene Canvas
+ - Gene Canvas Overlay
+
+ - Tooltip Container
+
+
+
+eg: var plot = new ManhattanPlot(
+	div,
+
+	{
+		primary: {x: [], y: []},
+		secondary: {x: [], y: []},
+		genes: [],
+		threshold: 0,
+	},
+
+	{
+		title: 'test',
+
+		zoom, 
+		onZoom, // zoom not required if onZoom is defined
+		
+		pan, 
+		onPan, // pan not required if onPan is defined
+
+		selectableAreas: [{x0, x1, y0, y1, data}],
+		onSelect,
+
+		primary: {
+			x: {
+				extent, 
+				title,
+				ticks: [{value, label}], 
+				categorical: true, // if categorical, labels are between
+			},
+			y: {extent, title},
+			point: {tooltip: fn},
+		},
+	},
+
+	{
+		width: 100,
+		height: 100,
+
+		font: {
+			default: '',
+			title: '',
+			axis: '',
+		},
+		colors: {
+			primary: '',
+			secondary: '',
+			genes: '',
+		},
+		layout: {
+			point: {size: 4},
+			genes: {padding, height}
+		},
+	}
+)
+
+
+let data = {
+	primary: {x, y},
+	secondary: {x, y},
+	genes: {txStart, txEnd, exonStarts, exonEnds, etc}[],
+}
+
+let config = {
+	title: '',
+	behaviors: {
+		zoom, // true/false
+		pan, // true/false
+		selectableAreas: [{x0, x1, y0, y1, data}],
+	},
+	// events are non-serializable
+	events: { 
+		onZoom,
+		onPan,
+		onSelect,
+	},
+	axis: {
+		x: {
+			title, 
+			extent, 
+			ticks: [{value, label}],
+		},
+		y: {
+			title,
+			extent
+		},
+	},
+	tooltips: {
+		point: {},
+		gene: {},
+	},
+}
+
+let styles = {
+	backgroundColor: '',
+	width: 0,
+	height: 0,
+	font: {
+		title: '',
+		axisTitle: '',
+		default: '',
+	},
+	point: {
+		primary: {color, size},
+		secondary: {color, size},
+	}
+	gene: {
+		color, rows,
+	},
+	axis: {
+		x: {width, tickLabelPlacement: 'between'},
+		y: {width},
+	},
+	threshold: {
+		pattern, color, thickness, opacity,
+	},
+	margins: {
+		left, right, top, bottom
+	}
+};
+
+
+class ManhattanPlot {
+	constructor(container, data, config, styles) {
+		this.container = container;
+		this.data = data;
+		this.config = config;
+		this.styles = styles;
+
+		this.plotContext = create2DContext();
+		this.plotOverlayContext = create2DContext();
+
+		this.genePlotContext = create2DContext();
+		this.genePlotOverlayContext = create2DContext();
+
+		this.draw();
+		this.initEvents();
+	}
+
+	draw() {
+		this.initSize();
+		this.initExtents();
+		this.initScales();
+		drawBackground(plotContext, styles);
+		drawBackground(genePlotContext, styles);
+		drawTitle(plotContext, config, styles);
+		drawThreshold(plotContext, data, config, styles);
+		drawPoints(plotContext, data, config, styles);
+		drawXAxis(plotContext, data, config, styles);
+		drawYAxis(plotContext, data, config, styles);
+		drawGenes(genePlotContext, data, config, styles);
+	}
+
+	redraw(addEvents) {
+		this.styles.width = null;
+		this.styles.height = null;
+		this.draw();
+		if (addEvents) this.initEvents();
+	}
+
+	reset() {
+		this.styles.width = null;
+		this.styles.height = null;
+		this.config.axis.x.extents = null;
+		this.config.axis.y.extents = null;
+		this.config.axis.x.ticks = null;
+		this.config.axis.y.ticks = null;
+		this.config.axis.x.scale = null;
+		this.config.axis.y.scale = null;
+		this.draw();
+		this.initEvents();
+	}
+
+	initSize() {
+		const container = this.container;
+		const styles = this.styles;
+
+		if (!styles.margins)
+			styles.margins = {left: 40, right: 0, top: 40, bottom: 20};
+
+		if (!styles.width) {
+			styles.width = container.clientWidth;
+			styles.innerWidth = styles.width - margins.left - margins.right;
+		}
+
+		if (!styles.height) {
+			styles.height = container.clientHeight;
+			styles.innerHeight = styles.height - margins.top - margins.bottom;
+		}
+	}
+
+	initExtents() {
+		const data = this.config.data;
+		const xAxis = this.config.axis.x;
+		const yAxis = this.config.axis.y;
+		const xData = data.primary.x.concat(data.secondary.x);
+		const yData = data.primary.y.concat(data.secondary.x);
+
+		if (!xAxis.extents) 
+			xAxis.extents = getExtents(xData);
+
+		if (!yAxis.extents)
+			yAxis.extents = getExtents(yData);
+
+		if (!xAxis.ticks)
+			xAxis.ticks = getTicks(xData);
+
+		if (!yAxis.ticks)
+			yAxis.ticks = getTicks(yData);
+	}
+
+	initScales() {
+		const xAxis = this.config.axis.x;
+		const yAxis = this.config.axis.y;
+		const {margins, width, height} = this.styles;
+		const innerWidth = width - margins.left - margins.right;
+		const innerHeight = height - margins.top - margins.bottom;
+
+		if (!xAxis.scale) {
+			xAxis.scale = getScale(xAxis.extents, [0, innerWidth]);
+		}
+
+		if (!yAxis.scale) {
+			if (!data.secondary) {
+				yAxis.scale = getScale(yAxis.extents, [innerHeight, 0]);
+			} else {
+				// create a secondary scale if plotting mirrored data
+				yAxis.scale = getScale(
+					yAxis.extents, 
+					[innerHeight / 2, 0]
+				);
+
+				yAxis.secondaryScale = getScale(
+					yAxis.extents, 
+					[innerHeight / 2, innerHeight]
+				);
+			}
+		}
+	}
+
+	initEvents() {
+		const { behaviors, events, tooltips } = this.config;
+		removeEventHandlers(document.body);
+		removeEventHandlers(plotOverlayContext);
+		removeEventHandlers(genePlotOverlayContext);
+
+		if (tooltips.point)
+			enablePointTooltips(plotOverlayContext, data, config, styles);
+
+		if (tooltips.gene)
+			enableGeneTooltips(plotContext, data, config, styles);
+
+		if (behaviors.zoom) // selection zoom
+			enableZoom(plotOverlayContext);
+
+		if (behaviors.pan)
+			enablePan(plotOverlayContext);
+
+		if (behaviors.selectableAreas)
+			enableSelectableAreas(plotContext, behaviors.selectableAreas);
+	}
+
+	destroy() {
+		removeChildren(this.container);
+		removeEventHandlers(document.body);
+		removeEventHandlers(plotOverlayContext);
+		removeEventHandlers(genePlotOverlayContext);
+
+		delete this.data;
+		delete this.config;
+		delete this.styles;
+
+		delete this.plotContext
+		delete this.genePlotContext;
+
+		delete this.plotOverlayContext;
+		delete this.genePlotOverlayContext;
+	}
+}
+
+function drawTitle(plotContext, config, styles) {
+	let title = config.title;
+	let [width, height, margins] = styles.margins;
+	let titleRect = {
+		x: margins.left,
+		y: 0,
+		width: width - margins.right,
+		height: margins.top
+	}
+	const midpoint = (titleRect.x + titleRect.width) / 2
+
+	restoreContext(plotContext, ctx => {
+		ctx.fillStyle = styles.backgroundColor;
+		ctx.fillRect(
+			titleRect.x, 
+			titleRect.y, 
+			titleRect.width, 
+			titleRect.height
+		);
+
+		ctx.translate(midpoint, 0);
+		renderText(
+			ctx, 
+			config.title,
+			{	
+				font: styles.title, 
+				textAlignment: 'center'
+			}
+		);
+	});
+}
+
+function drawPoints(plotContext, data, config, styles) {
+	const {primary, secondary} = data;
+	const {margins, point} = styles;
+	const {color: color, size: size} = point.primary;
+	const {color: color2, size: size2} = point.secondary;
+	const {scale: xScale} = config.axis.x;
+	const {scale: yScale, secondaryScale: yScale2} = config.axis.y;
+
+	restoreContext(plotContext, ctx => {
+		ctx.translate(margins.left, margins.top);
+
+		ctx.beginPath();
+		for (let i = 0; i < primary.x.length; i ++) {
+			let x = xScale(primary.x[i]);
+			let y = yScale(primary.y[i]);
+			if (x < 0 || x > innerWidth || y < 0 || y > innerHeight)
+				continue;
+
+			ctx.moveTo(x, y);
+			ctx.arc(x, y, size, 0, 2 * Math.PI, true);
+		}
+		ctx.fillStyle = color;
+		ctx.fill();
+
+		if (!secondary) return;
+
+		ctx.beginPath();
+		for (let j = 0; j < secondary.x.length; j ++) {
+			let x = xScale(secondary.x[j]);
+			let y = yScale2(secondary.y[j]);
+			if (x < 0 || x > innerWidth || y < 0 || y > innerHeight)
+				continue;
+
+			ctx.moveTo(x, y);
+			ctx.arc(x, y, size, 0, 2 * Math.PI, true);
+		}
+		ctx.fillStyle = color2;
+		ctx.fill();
+	})
+}
+
+
+function interpolateTicks(ticks) {
+	return ticks.map((tick, index) => {
+		let value = tick.value;
+		let nextValue = ticks[index + 1].value;
+		if (nextValue !== undefined)
+			tick.interpolatedValue = (value + nextValue) / 2;
+		return tick;
+	});
+}
+
+function interpolateValues(values) {
+	const interpolatedValues = new Array(values.length - 1);
+	for (let i = 0; i < values.length - 1; i ++)
+		interpolatedValues[i] = (values[i] + values[i + 1]) / 2
+	return interpolatedValues;
+}
+
+function drawXAxis(plotContext, data, config, styles) {
+	const { margins, width, height, innerWidth, innerHeight } = styles;
+	const { thickness, tickLabelPlacement } = styles.axis;
+	const { axisTitle: titleFont, default: defaultFont } = styles.font;
+	const tickSize = {height: thickness * 5, width: thickness}
+
+	if (tickLabelPlacement === 'between') {
+		ticks = interpolateTicks(ticks);
+	}
+
+	restoreContext(plotContext, ctx => {
+		ctx.translate(margins.left, margins.top + innerHeight);
+
+		// draw axis line
+		ctx.fillRect(0, 0, innerWidth, thickness);
+
+		// draw ticks
+		ticks.forEach((tick, index) => {
+			restoreContext(ctx, ctx => {
+				// draw tick marks
+				ctx.fillRect(
+					xScale(tick.value), 0,  
+					tickSize.width, tickSize.height,
+				);
+
+				// draw tick label
+
+				// do not draw label if there is no interpolated value
+				if (tickLabelPlacement === 'between' && !tick.interpolatedValue)
+					return;
+
+				// go to the label offset
+				let value = tick.interpolatedValue || tick.value;
+				ctx.translate(xScale(value), tickSize.height);
+				renderText(ctx, tick.label, {	
+					font: styles.title, 
+					textAlignment: 'center'
+				});
+			});
+		});
+	})
+}
+
+
+function drawYAxis(plotContext, data, config, styles) {
+	const { margins, width, height, innerWidth, innerHeight } = styles;
+	const { lineWidth, tickLabelPlacement } = styles.axis;
+	const { axisTitle: titleFont, default: defaultFont } = styles.font;
+	const tickSize = {height: thickness * 5, width: thickness}
+
+	if (tickLabelPlacement === 'between') {
+		ticks = interpolateTicks(ticks);
+	}
+
+	restoreContext(plotContext, ctx => {
+		ctx.translate(margins.left, margins.top);
+
+		// draw axis line
+		ctx.fillRect(0, 0, lineWidth, innerHeight);
+
+		// draw ticks
+		ticks.forEach((tick, index) => {
+			restoreContext(ctx, ctx => {
+				// draw tick marks
+				ctx.fillRect(
+					-tickSize.width, 
+					yScale(tick.value), 
+					tickSize.height,
+					tickSize.width,
+				);
+
+				// draw tick label
+
+				// do not draw label if there is no interpolated value
+				if (tickLabelPlacement === 'between' && 
+					!tick.interpolatedValue)
+					return;
+
+				// go to the label offset
+				let value = tick.interpolatedValue || tick.value;
+				ctx.translate(-tickSize.width, yScale(value));
+				renderText(ctx, tick.label, {
+					font: styles.title, 
+					textAlignment: 'center'
+				});
+			});
+		});
+	});
+}
+
+function drawThreshold(plotContext, data, config, styles) {
+	const { scale } = config.axis.y;
+	const { margins, innerWidth } = styles;
+	const y = scale(data.threshold);
+
+	restoreContext(plotContext, ctx => {
+		ctx.translate(margins.left, margins.top);
+		ctx.beginPath();
+		ctx.moveTo(0, y);
+		ctx.lineTo(innerWidth, y);
+		ctx.setLineDash(styles.threshold.dash)
+		ctx.stroke();
+	});
+}
+
+function enablePointTooltips(plotContext, data, config, styles) {
+	let values = data.primary.concat(data.secondary);
+	let tooltip = new Tooltip();
+	let hitAreas = values.map(point => {
+		let size = styles.point.size * 2;
+		let x0 = xScale(point.x);
+		let y0 = yScale(point.y);
+		let x1 = x0 + size;
+		let y1 = y0 + size;
+		return {x0, y0, x1, y1, point};
+	});
+
+	addEventListener(plotContext.canvas, 'mousemove', ev => {
+		let x = ev.offsetX - margins.left;
+		let y = ev.offsetY - margins.top;
+		let hitArea = hitAreas.find(a => 
+			x >= a.x0 && x <= a.x1 &&
+			y >= a.y0 && y <= a.y1
+		);
+		if (!hitArea) return;
+		const tooltipContent = config.tooltip(hitArea.point);
+		tooltip.show(ev.clientX, ev.clientY, tooltipContent);
+	});
+
+	addEventListener(document.body, 'click', ev => tooltip.remove());
+}
+
+function enableGeneTooltips(ctx, data, config, styles) {
+	let values = data.genes;
+	let tooltip = new Tooltip();
+	let genes = packGenes(data.genes);
+	let hitAreas = [];
+
+	genes.forEach((row, i) => row.forEach(gene => 
+		hitAreas.push({
+			x0: xScale(gene.txStart), 
+			x1: xScale(gene.txEnd), 
+			y0: i, 
+			y1: i * rowHeight, 
+			gene
+		})
+	));
+
+	addEventListener(ctx.canvas, 'mousemove', ev => {
+		let x = ev.offsetX;
+		let y = ev.offsetY;
+		let hitArea = hitAreas.find(a => 
+			x >= a.x0 && x <= a.x1 &&
+			y >= a.y0 && y <= a.y1
+		);
+		if (!hitArea) return;
+		const tooltipContent = config.tooltip(hitArea.gene);
+		tooltip.show(ev.clientX, ev.clientY, tooltipContent);
+	});
+
+	addEventListener(document.body, 'click', ev => tooltip.remove());
+}
+
+function enableZoom(ctx, config, styles) {
+	let {margins} = styles;
+	let isMouseDown = false;
+	let extents = {x0: null, x1: null, y0: null, y1: null};
+
+	addEventListener(ctx.canvas, 'mousedown', ev => {
+		isMouseDown = true;
+		extents.x0 = ev.offsetX - margins.left;
+		extents.y0 = ev.offsetY - margins.top;
+	});
+
+	addEventListener(document.body, 'mousemove', ev => {
+		const {offsetX, offsetY} = getLocalOffsets(
+			ev.clientX,
+			ev.clientY,
+			ctx.canvas
+		);
+		extents.x1 = offsetX - margins.left;
+		extents.y1 = offsetY - margins.top;
+	});
+
+	addEventListener(document.body, 'mouseup', ev => {
+		if (!isMouseDown) return;
+		let inverseXScale = createScale([0, innerWidth], config.axis.x.extents);
+		let inverseYScale = createScale([innerHeight, 0], config.axis.y.extents);
+
+		plot.setExtents(
+			[
+				inverseXScale(extents.x0),
+				inverseXScale(extents.x1),
+			], 
+			[
+				inverseYScale(extents.y0),
+				inverseYScale(extents.y1),
+			]
+		);
+		plot.redraw();
+	});
+}
+
+function enablePan(ctx) {
+
+}
+
+function enableSelectableAreas(ctx, areas) {
+
+}
+
